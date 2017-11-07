@@ -27,11 +27,10 @@ MotorRight_PWM = 37
 # =======================================================================
 # create left pwm object to control the speed of left motor
 # =======================================================================
-LEFT_PWM = GPIO.PWM(MotorLeft_PWM, 100)
 
 # =======================================================================
 # create right pwm object to control the speed of right motor
 # =======================================================================
-RIGHT_PWM = GPIO.PWM(MotorRight_PWM, 100)
 
-
+TRIG = 33
+ECHO = 31
