@@ -134,15 +134,41 @@ class Car:
         return led_states
 
     def determine_direction(self):
-        states = self.get_led_states()
-        online_sensors = [(i-2) for i, state in enumerate(states) if state[1] == True]
-        print(sum(online_sensors))
+        # states = self.get_led_states()
+        # online_sensors = [(i - 2) for i, state in enumerate(states) if state[1] == True]
+        # print(sum(online_sensors))
+        while True:
+            led_list = [LEFTMOST_LED, LEFTLESS_LED, CENTER_LED, RIGHTLESS_LED, RIGHTMOST_LED]
+            led_state = list()
 
+            for led in led_list:
+                GPIO.setup(led, GPIO.IN)
+                led_state.append(GPIO.input(led))
+            
+            if led_state[2] == 0 and led_state[1] == 1:
+                self.left_pwm.ChangeDutyCycle(self.l_speed += 5)
+                time.sleep(0.5)
+                self.left_pwm.ChangeDutyCycle(self.l_speed -= 5)
+            elif led_state[2] == 0 and led_state[3] == 1:
+                self.right_pwm.ChangeDutyCycle(self.r_speed += 5)
+                time.sleep(0.5)
+                self.right_pwm.ChangeDutyCycle(self.r_speed -= 5)
+            elif led_state == [1,1,1,1,1]:
+                self.stop
+            elif led_state[0] == 0:
+                self.right_pwm.ChangeDutyCycle(self.r_speed += 15)
+                time.sleep(1)
+                self.right_pwm.ChangeDutyCycle(self.r_speed -= 15)
+            elif led_state[4] == 0:
+                self.left_pwm.ChangeDutyCycle(self.l_speed += 15)
+                time.sleep(0.5)
+                self.left_pwm.ChangeDutyCycle(self.l_speed -= 15)
+            
 
 
     def line_trace(self):
-        l_speed = 50
-        r_speed = 50
+        self.l_speed = 50
+        self.r_speed = 50
         while True:
             self.determine_direction()
 
