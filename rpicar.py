@@ -118,7 +118,7 @@ class Car:
         return distance
 
 
-    def led_detect(self):
+    def get_led_states(self):
         led_states = [
             [LEFTMOST_LED, True], # PIN_NUM, IS_ONLINE
             [LEFTLESS_LED, True],
@@ -133,8 +133,8 @@ class Car:
             led_states[i][1] = (GPIO.input(pin_num) == 1)
         return led_states
 
-    def check_direction(self):
-        states = self.led_detect()
+    def determine_direction(self):
+        states = self.get_led_states()
         online_sensors = [(i-2) for i, state in enumerate(states) if state[1] == True]
         print(sum(online_sensors))
 
@@ -144,7 +144,7 @@ class Car:
         l_speed = 50
         r_speed = 50
         while True:
-            self.check_direction()
+            self.determine_direction()
 
 
 
