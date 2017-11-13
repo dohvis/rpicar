@@ -10,6 +10,13 @@ from config import (
     backward1,
     MotorLeft_PWM,
     MotorRight_PWM,
+    TRIG,
+    ECHO,
+    LEFTMOSTLED,
+    LEFTLESSLED,
+    CENTERLED,
+    RIGHTLESSLED,
+    RIGHTMOSTLED
 )
 import time
 
@@ -156,18 +163,16 @@ class Car:
     def get_distance(self):
         GPIO.setmode(GPIO.BOARD)
 
-        trig = 33
-        echo = 31
 
         # ultrasonic sensor setting
-        GPIO.setup(trig, GPIO.OUT)
-        GPIO.setup(echo, GPIO.IN)
+        GPIO.setup(TRIG, GPIO.OUT)
+        GPIO.setup(ECHO, GPIO.IN)
 
-        GPIO.output(trig, False)
+        GPIO.output(TRIG, False)
         time.sleep(0.5)
-        GPIO.output(trig, True)
+        GPIO.output(TRIG, True)
         time.sleep(0.00001)
-        GPIO.output(trig, False)
+        GPIO.output(TRIG, False)
 
         while GPIO.input(echo) == 0:
             pulse_start = time.time()
@@ -179,6 +184,17 @@ class Car:
         distance = pulse_duration * 17000
         distance = round(distance, 2)
         return distance
+
+    def line_trace(self):
+        led = [LEFTMOSTLED, LEFTLESSLED, CENTERLED, RIGHTLESSLED, RIGHTMOSTLED]
+        led_state = dict()
+
+        for i in led:
+            GPIO.setup(i, GPIO.IN)
+            led_state[str(i)] = GPIO.input(i)
+        
+        return led_state
+
 
     def swing_turn(self, speed, duration, direction):
         if direction == 'l':
@@ -205,3 +221,4 @@ class Car:
 if __name__ == '__main__':
     car = Car()
     car.run()
+
