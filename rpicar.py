@@ -12,85 +12,16 @@ from config import (
     MotorRight_PWM,
     TRIG,
     ECHO,
-    LEFTMOSTLED,
-    LEFTLESSLED,
-    CENTERLED,
-    RIGHTLESSLED,
-    RIGHTMOSTLED
+    LEFTMOST_LED,
+    LEFTLESS_LED,
+    CENTER_LED,
+    RIGHTLESS_LED,
+    RIGHTMOST_LED
 )
 import time
 
 
-
-
-def pwm_low():
-    GPIO.output(MotorLeft_PWM, GPIO.LOW)
-    GPIO.output(MotorRight_PWM, GPIO.LOW)
-    LEFT_PWM.ChangeDutyCycle(0)
-    RIGHT_PWM.ChangeDutyCycle(0)
-    GPIO.cleanup()
-
-
-# chan_list = (11, 12)
-# GPIO.output(chan_list, GPIO.LOW)  # all LOW
-# GPIO.output(chan_list, (GPIO.HIGH, GPIO.LOW))  # first HIGH, second LOW
-
-
-def _vertical_move(is_forward, speed, duration=None):
-    _move_wheel(LEFT, is_forward, speed, duration)
-    _move_wheel(RIGHT, is_forward, speed, duration)
-
-
-def forward(speed, duration=None):
-    _vertical_move('go', speed, duration)
-
-
-def backward(speed, duration):
-    _vertical_move('back', speed, duration)
-
-
-def interface():
-    """
-    go 30 3;  sleep 1
-    st 30 1 l
-    pt 30 1 r
-    :return:
-    """
-    cmds = {
-        "g": forward, "b": backward,
-        "st": swing_turn, "pt": point_turn,
-    }
-    input_cmd = input(">>> ")
-    input_cmd.split(';')
-    for cmd in input_cmd:
-        argv = cmd.split()
-        func = argv[0]
-
-        args = argv[1:]
-
-        try:
-            cmds[func](*args)
-        except KeyboardInterrupt:
-            pwm_low()
-
-
-def main():
-    """
-    1. 배터리 풀충
-    2. 직진 보정 (속도 같게 할건지 다르게 줘야 하는지)
-    3. 장애물이 다시 나타날 때 까지 회전 조금씩 하는거 구현
-    4.
-    """
-
-    speed = 50
-    forward_until_obstacle(speed)
-
-    # st_speed = 70
-    # swing_turn(st_speed, 2, 'r')
-    #
-    # pt_speed = 40
-    # point_turn(pt_speed, 2, 'r')
-    # get_distance()
+LOOP = None
 
 
 class Car:
@@ -113,6 +44,8 @@ class Car:
         GPIO.setup(MotorRight_A, GPIO.OUT)
         GPIO.setup(MotorRight_B, GPIO.OUT)
         GPIO.setup(MotorRight_PWM, GPIO.OUT)
+
+        GPIO.setup(CENTER_LED, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
         self.left_flag = True
         self.right_flag = not self.left_flag
@@ -163,7 +96,6 @@ class Car:
     def get_distance(self):
         GPIO.setmode(GPIO.BOARD)
 
-
         # ultrasonic sensor setting
         GPIO.setup(TRIG, GPIO.OUT)
         GPIO.setup(ECHO, GPIO.IN)
@@ -185,15 +117,35 @@ class Car:
         distance = round(distance, 2)
         return distance
 
-    def line_trace(self):
-        led = [LEFTMOSTLED, LEFTLESSLED, CENTERLED, RIGHTLESSLED, RIGHTMOSTLED]
-        led_state = dict()
 
-        for i in led:
-            GPIO.setup(i, GPIO.IN)
-            led_state[str(i)] = GPIO.input(i)
-        
-        return led_state
+    def led_detect(self):
+        led_states = [
+            [LEFTMOST_LED, True], # PIN_NUM, IS_ONLINE
+            [LEFTLESS_LED, True],
+            [CENTER_LED, True],
+            [RIGHTLESS_LED, True],
+            [RIGHTMOST_LED, True],
+        ]
+
+        for i, v in enumerate(led_states):
+            pin_num, is_line = v
+            GPIO.setup(pin_num, GPIO.IN)
+            led_states[i][1] = (GPIO.input(pin_num) == 1)
+        return led_states
+
+    def check_direction(self):
+        states = self.led_detect()
+        online_sensors = [(i-2) for i, state in enumerate(states) if state[1] == True]
+        print(sum(online_sensors))
+
+
+
+    def line_trace(self):
+        l_speed = 50
+        r_speed = 50
+        while True:
+            self.check_direction()
+
 
 
     def swing_turn(self, speed, duration, direction):
@@ -213,12 +165,13 @@ class Car:
             self.move_wheel(self.right_flag, self.backward_flag, speed, duration)
 
     def run(self):
-        speed = 50
-        self.forward_until_obstacle(speed)
-        self.point_turn(speed, 3, 'r')
+        self.line_trace()
 
 
 if __name__ == '__main__':
     car = Car()
-    car.run()
-
+    try:
+        car.run()
+    except KeyboardInterrupt:
+        GPIO.cleanup()
+    GPIO.cleanup()
