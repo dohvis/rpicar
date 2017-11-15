@@ -15,8 +15,45 @@ from config import (
     RIGHTMOST_LED
 )
 import time
+from ctypes import c_double
+from multiprocessing import Process, Value, Lock
 
-LOOP = None
+LOCK = Lock()
+DISTANCE = Value(c_double, 0.0)
+
+
+def set_distance():
+    try:
+        import os
+        GPIO.setmode(GPIO.BOARD)
+
+        # ultrasonic sensor setting
+        GPIO.setup(TRIG, GPIO.OUT)
+        GPIO.setup(ECHO, GPIO.IN)
+
+        while True:
+            GPIO.output(TRIG, False)
+            time.sleep(0.3)
+            GPIO.output(TRIG, True)
+            time.sleep(0.00001)
+            GPIO.output(TRIG, False)
+
+            while GPIO.input(ECHO) == 0:
+                pulse_start = time.time()
+
+            while GPIO.input(ECHO) == 1:
+                pulse_end = time.time()
+
+            # from random import random
+            # pulse_duration = random() - random()
+            pulse_duration = pulse_end - pulse_start
+
+            distance = pulse_duration * 17000
+            distance = round(distance, 2)
+            with LOCK:
+                DISTANCE.value = distance
+    except KeyboardInterrupt:
+        GPIO.cleanup()
 
 
 class Car:
@@ -60,6 +97,8 @@ class Car:
         self.left_pwm.start(0)
         self.right_pwm.start(0)
 
+        self.lock = Lock()
+
     def move_wheel(self, is_left, is_forward, speed, duration=None):
         if is_left:
             if is_forward:
@@ -102,35 +141,10 @@ class Car:
 
     def forward_until_obstacle(self, speed):
         # go_forward(speed, speed, )
-        distance = self.get_distance()
+        distance = self.distance.value
         while distance > 3:
-            distance = self.get_distance()
-
+            distance = self.distance.value
         self.stop()
-
-    def get_distance(self):
-        GPIO.setmode(GPIO.BOARD)
-
-        # ultrasonic sensor setting
-        GPIO.setup(TRIG, GPIO.OUT)
-        GPIO.setup(ECHO, GPIO.IN)
-
-        GPIO.output(TRIG, False)
-        time.sleep(0.3)
-        GPIO.output(TRIG, True)
-        time.sleep(0.00001)
-        GPIO.output(TRIG, False)
-
-        while GPIO.input(ECHO) == 0:
-            pulse_start = time.time()
-
-        while GPIO.input(ECHO) == 1:
-            pulse_end = time.time()
-
-        pulse_duration = pulse_end - pulse_start
-        distance = pulse_duration * 17000
-        distance = round(distance, 2)
-        return distance
 
     def get_led_states(self):
         led_list = [LEFTMOST_LED, LEFTLESS_LED, CENTER_LED, RIGHTLESS_LED, RIGHTMOST_LED]
@@ -164,49 +178,53 @@ class Car:
         self.go_forward(30, 30, ['0', '0', '0', '0', '0'], 0.5)
 
     def run(self):
-
-        self.go_forward(25, 25, ['0', '0', '0', '0', '0'], 1)
-        while True:
-            line_check = self.get_led_states()
-
-            if line_check == ['0', '1', '1', '1', '1']:
-                self.go_forward(5, 75, line_check, 0.01)
-            elif line_check == ['1', '0', '1', '1', '1']:
-                self.go_forward(25, 35, line_check, 0.01)
-            elif line_check == ['1', '1', '0', '1', '1']:
-                self.go_forward(35, 35, line_check, 0.01)
-            elif line_check == ['1', '1', '1', '0', '1']:
-                self.go_forward(35, 25, line_check, 0.01)
-            elif line_check == ['1', '1', '1', '1', '0']:
-                self.go_forward(75, 10, line_check, 0.01)
-            elif line_check == ['0', '0', '1', '1', '1']:
-                self.go_forward(20, 45, line_check, 0.01)
-            elif line_check == ['1', '0', '0', '1', '1']:
-                self.go_forward(45, 30, line_check, 0.01)
-            elif line_check == ['1', '1', '0', '0', '1']:
-                self.go_forward(25, 45, line_check, 0.01)
-            elif line_check == ['1', '1', '1', '0', '0']:
-                self.go_forward(40, 20, line_check, 0.01)
-            elif line_check == ['1', '1', '0', '0', '0']:
-                self.go_forward(25, 40, line_check, 0.01)
-            elif line_check == ['1', '0', '0', '0', '1']:
-                self.go_forward(30, 30, line_check, 0.01)
-            elif line_check == ['0', '0', '0', '1', '1']:
-                self.go_forward(30, 15, line_check, 0.01)
-            elif line_check == ['1', '1', '1', '1', '1']:
-                self.go_forward(35, 35, line_check, 0.01)
-            elif line_check == ['0', '0', '0', '0', '1']:
-                self.go_forward(45, 30, line_check, 0.01)
-            elif line_check == ['1', '0', '0', '0', '0']:
-                self.go_forward(20, 55, line_check, 0.01)
-            else:
-                self.stop()
+        # self.go_forward(25, 25, ['0', '0', '0', '0', '0'], 1)
+        try:
+            while True:
+                line_check = self.get_led_states()
+                print(DISTANCE.value)
+                if line_check == ['0', '1', '1', '1', '1']:
+                    self.go_forward(5, 75, line_check, 0.01)
+                elif line_check == ['1', '0', '1', '1', '1']:
+                    self.go_forward(25, 35, line_check, 0.01)
+                elif line_check == ['1', '1', '0', '1', '1']:
+                    self.go_forward(35, 35, line_check, 0.01)
+                elif line_check == ['1', '1', '1', '0', '1']:
+                    self.go_forward(35, 25, line_check, 0.01)
+                elif line_check == ['1', '1', '1', '1', '0']:
+                    self.go_forward(75, 10, line_check, 0.01)
+                elif line_check == ['0', '0', '1', '1', '1']:
+                    self.go_forward(20, 45, line_check, 0.01)
+                elif line_check == ['1', '0', '0', '1', '1']:
+                    self.go_forward(45, 30, line_check, 0.01)
+                elif line_check == ['1', '1', '0', '0', '1']:
+                    self.go_forward(25, 45, line_check, 0.01)
+                elif line_check == ['1', '1', '1', '0', '0']:
+                    self.go_forward(40, 20, line_check, 0.01)
+                elif line_check == ['1', '1', '0', '0', '0']:
+                    self.go_forward(25, 40, line_check, 0.01)
+                elif line_check == ['1', '0', '0', '0', '1']:
+                    self.go_forward(30, 30, line_check, 0.01)
+                elif line_check == ['0', '0', '0', '1', '1']:
+                    self.go_forward(30, 15, line_check, 0.01)
+                elif line_check == ['1', '1', '1', '1', '1']:
+                    self.go_forward(35, 35, line_check, 0.01)
+                elif line_check == ['0', '0', '0', '0', '1']:
+                    self.go_forward(45, 30, line_check, 0.01)
+                elif line_check == ['1', '0', '0', '0', '0']:
+                    self.go_forward(20, 55, line_check, 0.01)
+                else:
+                    self.stop()
+        except KeyboardInterrupt:
+            GPIO.cleanup()
 
 
 if __name__ == '__main__':
     car = Car()
-    try:
-        car.run()
-    except KeyboardInterrupt:
-        GPIO.cleanup()
+    distance_proc = Process(target=set_distance)
+    main_proc = Process(target=car.run)
+    distance_proc.start()
+    main_proc.start()
+    distance_proc.join()
+    main_proc.join()
     GPIO.cleanup()
