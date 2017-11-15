@@ -4,10 +4,6 @@ from config import (
     MotorLeft_B,
     MotorRight_A,
     MotorRight_B,
-    forward0,
-    forward1,
-    backward0,
-    backward1,
     MotorLeft_PWM,
     MotorRight_PWM,
     TRIG,
@@ -19,7 +15,6 @@ from config import (
     RIGHTMOST_LED
 )
 import time
-
 
 LOOP = None
 
@@ -46,6 +41,12 @@ class Car:
         GPIO.setup(MotorRight_PWM, GPIO.OUT)
 
         GPIO.setup(CENTER_LED, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        # led setup
+        GPIO.setup(LEFTLESS_LED, GPIO.IN)
+        GPIO.setup(LEFTMOST_LED, GPIO.IN)
+        GPIO.setup(CENTER_LED, GPIO.IN)
+        GPIO.setup(RIGHTLESS_LED, GPIO.IN)
+        GPIO.setup(RIGHTMOST_LED, GPIO.IN)
 
         self.left_flag = True
         self.right_flag = not self.left_flag
@@ -73,12 +74,26 @@ class Car:
                 GPIO.output(MotorRight_A, GPIO.HIGH)
                 GPIO.output(MotorRight_B, GPIO.LOW)
             else:
-                GPIO.output(MotorRight_A, GPIO.LOW)
-                GPIO.output(MotorRight_B, GPIO.HIGH)
+                GPIO.output(MotorRight_A, GPIO.HIGH)
+                GPIO.output(MotorRight_B, GPIO.LOW)
             self.right_pwm.ChangeDutyCycle(speed)
 
         if isinstance(duration, int):
             time.sleep(duration)
+            self.stop()
+
+    def go_forward(self, left_speed, right_speed, line_state, duration):
+        # left
+        GPIO.output(MotorLeft_A, GPIO.LOW)
+        GPIO.output(MotorLeft_B, GPIO.HIGH)
+        self.left_pwm.ChangeDutyCycle(left_speed)
+        # right
+        GPIO.output(MotorRight_A, GPIO.HIGH)
+        GPIO.output(MotorRight_B, GPIO.LOW)
+        self.right_pwm.ChangeDutyCycle(right_speed)
+        time.sleep(duration)
+
+        if line_state == [1, 1, 1, 1, 1]:
             self.stop()
 
     def stop(self):
@@ -86,7 +101,7 @@ class Car:
         self.right_pwm.ChangeDutyCycle(0)
 
     def forward_until_obstacle(self, speed):
-        forward(speed)
+        # go_forward(speed, speed, )
         distance = self.get_distance()
         while distance > 3:
             distance = self.get_distance()
@@ -101,15 +116,15 @@ class Car:
         GPIO.setup(ECHO, GPIO.IN)
 
         GPIO.output(TRIG, False)
-        time.sleep(0.5)
+        time.sleep(0.3)
         GPIO.output(TRIG, True)
         time.sleep(0.00001)
         GPIO.output(TRIG, False)
 
-        while GPIO.input(echo) == 0:
+        while GPIO.input(ECHO) == 0:
             pulse_start = time.time()
 
-        while GPIO.input(echo) == 1:
+        while GPIO.input(ECHO) == 1:
             pulse_end = time.time()
 
         pulse_duration = pulse_end - pulse_start
@@ -117,69 +132,21 @@ class Car:
         distance = round(distance, 2)
         return distance
 
-
     def get_led_states(self):
-        led_states = [
-            [LEFTMOST_LED, True], # PIN_NUM, IS_ONLINE
-            [LEFTLESS_LED, True],
-            [CENTER_LED, True],
-            [RIGHTLESS_LED, True],
-            [RIGHTMOST_LED, True],
-        ]
+        led_list = [LEFTMOST_LED, LEFTLESS_LED, CENTER_LED, RIGHTLESS_LED, RIGHTMOST_LED]
+        led_state = list()
 
-        for i, v in enumerate(led_states):
-            pin_num, is_line = v
-            GPIO.setup(pin_num, GPIO.IN)
-            led_states[i][1] = (GPIO.input(pin_num) == 1)
-        return led_states
+        for led in led_list:
+            led_state.append(str(GPIO.input(led)))
 
-    def determine_direction(self):
-        # states = self.get_led_states()
-        # online_sensors = [(i - 2) for i, state in enumerate(states) if state[1] == True]
-        # print(sum(online_sensors))
-        while True:
-            led_list = [LEFTMOST_LED, LEFTLESS_LED, CENTER_LED, RIGHTLESS_LED, RIGHTMOST_LED]
-            led_state = list()
-
-            for led in led_list:
-                GPIO.setup(led, GPIO.IN)
-                led_state.append(GPIO.input(led))
-            
-            if led_state[2] == 0 and led_state[1] == 1:
-                self.left_pwm.ChangeDutyCycle(self.l_speed += 5)
-                time.sleep(0.5)
-                self.left_pwm.ChangeDutyCycle(self.l_speed -= 5)
-            elif led_state[2] == 0 and led_state[3] == 1:
-                self.right_pwm.ChangeDutyCycle(self.r_speed += 5)
-                time.sleep(0.5)
-                self.right_pwm.ChangeDutyCycle(self.r_speed -= 5)
-            elif led_state == [1,1,1,1,1]:
-                self.stop
-            elif led_state[0] == 0:
-                self.right_pwm.ChangeDutyCycle(self.r_speed += 15)
-                time.sleep(1)
-                self.right_pwm.ChangeDutyCycle(self.r_speed -= 15)
-            elif led_state[4] == 0:
-                self.left_pwm.ChangeDutyCycle(self.l_speed += 15)
-                time.sleep(0.5)
-                self.left_pwm.ChangeDutyCycle(self.l_speed -= 15)
-            
-
-
-    def line_trace(self):
-        self.l_speed = 50
-        self.r_speed = 50
-        while True:
-            self.determine_direction()
-
-
+        return led_state
 
     def swing_turn(self, speed, duration, direction):
         if direction == 'l':
             # left
-            self.move_wheel(self.right_flag, self.forward_flag, speed, duration)
+            self.move_wheel(self.right_flag, not self.forward_flag, speed, duration)
         else:
-            self.move_wheel(self.left_flag, self.forward_flag, speed, duration)
+            self.move_wheel(self.left_flag, False, speed, duration)
 
     def point_turn(self, speed, duration, direction):
         if direction == 'l':
@@ -190,8 +157,50 @@ class Car:
             self.move_wheel(self.left_flag, self.forward_flag, speed, duration)
             self.move_wheel(self.right_flag, self.backward_flag, speed, duration)
 
+    def avoid_obstacle(self):
+        self.swing_turn(30, 0.5, 'r')
+        self.go_forward(30, 30, ['0', '0', '0', '0', '0'], 0.5)
+        self.swing_turn(50, 0.5, 'l')
+        self.go_forward(30, 30, ['0', '0', '0', '0', '0'], 0.5)
+
     def run(self):
-        self.line_trace()
+
+        self.go_forward(25, 25, ['0', '0', '0', '0', '0'], 1)
+        while True:
+            line_check = self.get_led_states()
+
+            if line_check == ['0', '1', '1', '1', '1']:
+                self.go_forward(5, 75, line_check, 0.01)
+            elif line_check == ['1', '0', '1', '1', '1']:
+                self.go_forward(25, 35, line_check, 0.01)
+            elif line_check == ['1', '1', '0', '1', '1']:
+                self.go_forward(35, 35, line_check, 0.01)
+            elif line_check == ['1', '1', '1', '0', '1']:
+                self.go_forward(35, 25, line_check, 0.01)
+            elif line_check == ['1', '1', '1', '1', '0']:
+                self.go_forward(75, 10, line_check, 0.01)
+            elif line_check == ['0', '0', '1', '1', '1']:
+                self.go_forward(20, 45, line_check, 0.01)
+            elif line_check == ['1', '0', '0', '1', '1']:
+                self.go_forward(45, 30, line_check, 0.01)
+            elif line_check == ['1', '1', '0', '0', '1']:
+                self.go_forward(25, 45, line_check, 0.01)
+            elif line_check == ['1', '1', '1', '0', '0']:
+                self.go_forward(40, 20, line_check, 0.01)
+            elif line_check == ['1', '1', '0', '0', '0']:
+                self.go_forward(25, 40, line_check, 0.01)
+            elif line_check == ['1', '0', '0', '0', '1']:
+                self.go_forward(30, 30, line_check, 0.01)
+            elif line_check == ['0', '0', '0', '1', '1']:
+                self.go_forward(30, 15, line_check, 0.01)
+            elif line_check == ['1', '1', '1', '1', '1']:
+                self.go_forward(35, 35, line_check, 0.01)
+            elif line_check == ['0', '0', '0', '0', '1']:
+                self.go_forward(45, 30, line_check, 0.01)
+            elif line_check == ['1', '0', '0', '0', '0']:
+                self.go_forward(20, 55, line_check, 0.01)
+            else:
+                self.stop()
 
 
 if __name__ == '__main__':
