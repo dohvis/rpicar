@@ -86,9 +86,9 @@ class Car:
         GPIO.setup(RIGHTMOST_LED, GPIO.IN)
 
         self.left_flag = True
-        self.right_flag = not self.left_flag
+        self.right_flag = False
         self.forward_flag = True
-        self.backward_flag = not self.left_flag
+        self.backward_flag = False
         # TODO: 이거 config로
 
         self.left_pwm = GPIO.PWM(MotorLeft_PWM, 100)
@@ -130,8 +130,9 @@ class Car:
         GPIO.output(MotorRight_A, GPIO.HIGH)
         GPIO.output(MotorRight_B, GPIO.LOW)
         self.right_pwm.ChangeDutyCycle(right_speed)
-        time.sleep(duration)
 
+        if duration is not None:
+            time.sleep(duration)
         if line_state == [1, 1, 1, 1, 1]:
             self.stop()
 
@@ -160,7 +161,7 @@ class Car:
             # left
             self.move_wheel(self.right_flag, not self.forward_flag, speed, duration)
         else:
-            self.move_wheel(self.left_flag, False, speed, duration)
+            self.move_wheel(self.left_flag, self.forward_flag, speed, duration)
 
     def point_turn(self, speed, duration, direction):
         if direction == 'l':
@@ -172,17 +173,42 @@ class Car:
             self.move_wheel(self.right_flag, self.backward_flag, speed, duration)
 
     def avoid_obstacle(self):
-        self.swing_turn(30, 0.5, 'r')
-        self.go_forward(30, 30, ['0', '0', '0', '0', '0'], 0.5)
-        self.swing_turn(50, 0.5, 'l')
-        self.go_forward(30, 30, ['0', '0', '0', '0', '0'], 0.5)
+        print("Right")
+        _speed = 25
+        time.sleep(1)
+
+        self.go_forward(45, 0, ['0', '0', '0', '0', '0', ], 0.5)
+        self.stop()
+        time.sleep(1)
+
+        print("Curve")
+        self.go_forward(30, 30, ['0', '0', '0', '0', '0', ], 0.25)
+        self.stop()
+
+        while True:
+            self.go_forward(15, 50, ['0', '0', '0', '0', '0'], 0.01)
+            leds = self.get_led_states()
+            if '0' in leds:
+                self.go_forward(50, 20, ['0', '0', '0', '0', '0', ], 0.1)
+                self.stop()
+                print('-' * 20, leds)
+                break
 
     def run(self):
-        # self.go_forward(25, 25, ['0', '0', '0', '0', '0'], 1)
+        self.stop()
         try:
+            self.go_forward(25, 25, ['0', '0', '0', '0', '0'], 1)
             while True:
                 line_check = self.get_led_states()
-                print(DISTANCE.value)
+                if 5.0 < DISTANCE.value < 25.0:
+                    print("STOP!", DISTANCE.value)
+                    self.stop()
+                    time.sleep(1)
+                    self.avoid_obstacle()
+                else:
+                    print(line_check)
+                    pass
+
                 if line_check == ['0', '1', '1', '1', '1']:
                     self.go_forward(5, 75, line_check, 0.01)
                 elif line_check == ['1', '0', '1', '1', '1']:
@@ -196,7 +222,7 @@ class Car:
                 elif line_check == ['0', '0', '1', '1', '1']:
                     self.go_forward(20, 45, line_check, 0.01)
                 elif line_check == ['1', '0', '0', '1', '1']:
-                    self.go_forward(45, 30, line_check, 0.01)
+                    self.go_forward(30, 20, line_check, 0.005)
                 elif line_check == ['1', '1', '0', '0', '1']:
                     self.go_forward(25, 45, line_check, 0.01)
                 elif line_check == ['1', '1', '1', '0', '0']:
@@ -219,12 +245,18 @@ class Car:
             GPIO.cleanup()
 
 
-if __name__ == '__main__':
+def main():
     car = Car()
-    distance_proc = Process(target=set_distance)
-    main_proc = Process(target=car.run)
-    distance_proc.start()
-    main_proc.start()
-    distance_proc.join()
-    main_proc.join()
-    GPIO.cleanup()
+    car.run()
+
+
+if __name__ == '__main__':
+    try:
+        distance_proc = Process(target=set_distance)
+        main_proc = Process(target=main)
+        distance_proc.start()
+        main_proc.start()
+        distance_proc.join()
+        main_proc.join()
+    except KeyboardInterrupt:
+        GPIO.cleanup()
